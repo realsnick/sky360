@@ -1,6 +1,7 @@
 extern crate libc;
 extern crate signal_hook;
 
+mod recorder;
 mod serial;
 mod utils;
 // mod backoff;
@@ -11,9 +12,16 @@ use serialport::{ClearBuffer, SerialPort};
 use std::io::ErrorKind;
 use std::time::Duration;
 use utils::ResultError;
+use recorder::Recorder;
 
 use crate::utils::SignalState;
 
+const SYSTEM = "sky360";
+const SUB_SYSTEM = "cyclop";
+
+
+// ros parameters
+const SENSOR_NAME: &str = "gps";
 const SERIAL_PORT: &str = "/dev/ttyACM0";
 const BAUDE_RATE: u32 = 9600;
 const BUFFER_SIZE: usize = 4096; // bytes - should match partition block size at minimum
@@ -91,9 +99,10 @@ fn start(
 ) -> ResultError<()> {
     info!("Initializing");
 
-    //TODO: check signal for new mmf
-    //TODO: how to use DmaStream or DmaFile
-    let mut serial_buffer: Vec<u8> = vec![0; buffer_size];
+    let path = fmt! ("/tmp/sky360-data/{}/sensors/{}",SYSTEM, SUB_SYSTEM, SENSOR_NAME);
+    let recorder = Recorder::create(path);
+    
+    // let mut serial_buffer = recorder.createBuffer(buffer_size);
 
     let mut signals = utils::setup_signal_handler()?;
     let mut port = initialize_serial_port(serial_port, baud_rate, timeout)?;
@@ -106,9 +115,11 @@ fn start(
             SignalState::ReloadConfig => {}
             SignalState::Exit => return Ok(()),
         }
-
+        
         let bytes_read =
-            process_serial_data(&mut port, &mut serial_buffer, output_format)?.unwrap_or_default();
+            process_serial_data(&mut port, &recorder, buffer_size, output_format)?.unwrap_or_default();
+
+        
         debug!("Read {} bytes from {}", bytes_read, serial_port);
     }
 }
@@ -129,10 +140,15 @@ fn initialize_serial_port(
 
 fn process_serial_data(
     port: &mut Box<dyn SerialPort>,
-    serial_buffer: &mut Vec<u8>,
+    recoder: Recorder,
+    buffer_size: usize
     output_format: &OutputFormat,
 ) -> ResultError<Option<usize>> {
-    match port.read(serial_buffer.as_mut_slice()) {
+
+    //TODO: recorder requires the ROS Time 
+    let mut buffer = recorder.createBuffer(buffer_size);
+    
+    match port.read(mut buffer) { //.as_mut_slice()) {
         Err(e) => match e.kind() {
             ErrorKind::TimedOut => {
                 warn!("Warning: {}", e.to_string());
@@ -147,7 +163,8 @@ fn process_serial_data(
             }
         },
         Ok(bytes_read) => {
-            let data = &serial_buffer[..bytes_read];
+            let data = &buffer[..bytes_read];
+            record.flush()?; //TODO: required? (i think this is requires once the recorder uses DmaBuffer)
             match *output_format {
                 OutputFormat::Hex => {
                     trace!("{:x?}", data);

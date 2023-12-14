@@ -21,7 +21,9 @@
         # create nixpkgs that contains rustBuilder from cargo2nix overlay
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ cargo2nix.overlays.default ];
+          overlays = [
+            cargo2nix.overlays.default
+          ];
         };
 
         # create the workspace & dependencies package set
@@ -30,9 +32,9 @@
           packageFun = import ./Cargo.nix;
         };
 
-        environment.systemPackages = [ pkgs.systemd pkgs.pkg-config ];
       in
       rec {
+        #environment.systemPackages = [ pkgs.systemd pkgs.pkg-config ];
         # this is the output (recursive) set (expressed for each system)
         # the packages in `nix build .#packages.<system>.<name>`
         packages = {
