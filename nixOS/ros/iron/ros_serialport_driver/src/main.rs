@@ -12,13 +12,12 @@ use serialport::{ClearBuffer, SerialPort};
 use std::io::ErrorKind;
 use std::time::Duration;
 use utils::ResultError;
-use recorder::Recorder;
 
 use crate::utils::SignalState;
+use crate::recorder::Recorder;
 
-const SYSTEM = "sky360";
-const SUB_SYSTEM = "cyclop";
-
+const SYSTEM: &str = "sky360";
+const SUB_SYSTEM: &str = "cyclop";
 
 // ros parameters
 const SENSOR_NAME: &str = "gps";
@@ -29,7 +28,6 @@ const TIMEOUT: u64 = 1000; // ms
 
 //TODO: ros2
 //      we need to ensure the message timestamp = ros timestamp
-//TODO: mmf recorder
 //TODO: how to deal incoming messages ??? -
 //      start with #2 - file per read and continue with #3 to improve performance and diskspace usage
 
@@ -80,8 +78,8 @@ fn main() {
     Builder::from_env(Env::default().default_filter_or("trace")).init();
     match start(SERIAL_PORT, BAUDE_RATE, BUFFER_SIZE, TIMEOUT, &cli.output) {
         Err(e) => {
-            error!("Error: Terminated: {:?}", e);
-            return;
+            error!("Panic: {:?}", e);
+            panic!("Terminated");
         }
         Ok(_) => {
             info!("Goodbye...");
@@ -99,11 +97,9 @@ fn start(
 ) -> ResultError<()> {
     info!("Initializing");
 
-    let path = fmt! ("/tmp/sky360-data/{}/sensors/{}",SYSTEM, SUB_SYSTEM, SENSOR_NAME);
-    let recorder = Recorder::create(path);
+    let path = format! ("/tmp/{}/data/{}/sensors/{}",SYSTEM, SUB_SYSTEM, SENSOR_NAME);
+    let mut recorder = Recorder::new(path)?;
     
-    // let mut serial_buffer = recorder.createBuffer(buffer_size);
-
     let mut signals = utils::setup_signal_handler()?;
     let mut port = initialize_serial_port(serial_port, baud_rate, timeout)?;
 
@@ -117,7 +113,7 @@ fn start(
         }
         
         let bytes_read =
-            process_serial_data(&mut port, &recorder, buffer_size, output_format)?.unwrap_or_default();
+            process_serial_data(&mut port, &mut recorder, buffer_size, output_format)?.unwrap_or_default();
 
         
         debug!("Read {} bytes from {}", bytes_read, serial_port);
@@ -140,15 +136,15 @@ fn initialize_serial_port(
 
 fn process_serial_data(
     port: &mut Box<dyn SerialPort>,
-    recoder: Recorder,
-    buffer_size: usize
-    output_format: &OutputFormat,
+    recorder: &mut Recorder,
+    buffer_size: usize,
+    output_format: &OutputFormat
 ) -> ResultError<Option<usize>> {
 
     //TODO: recorder requires the ROS Time 
-    let mut buffer = recorder.createBuffer(buffer_size);
+    let buffer = recorder.create_buffer(buffer_size)?;
     
-    match port.read(mut buffer) { //.as_mut_slice()) {
+    match port.read(buffer) { //.as_mut_slice()) {
         Err(e) => match e.kind() {
             ErrorKind::TimedOut => {
                 warn!("Warning: {}", e.to_string());
@@ -164,7 +160,7 @@ fn process_serial_data(
         },
         Ok(bytes_read) => {
             let data = &buffer[..bytes_read];
-            record.flush()?; //TODO: required? (i think this is requires once the recorder uses DmaBuffer)
+            // recorder.flush()?; //TODO: required? (i think this is requires once the recorder uses DmaBuffer)
             match *output_format {
                 OutputFormat::Hex => {
                     trace!("{:x?}", data);

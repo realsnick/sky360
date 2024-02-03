@@ -1,24 +1,42 @@
-struct Recorder {
-    path: string,
+
+//TODO: mmf recorder
+
+use log::{trace, info};
+
+pub struct Recorder {
+    buffer: Option<Vec<u8>>,
+    path: String,
 }
 
 impl Recorder {
-    pub fn create(path: &str) -> Result<Recorder, String> {
-    //TODO: how to use DmaStream or DmaFile
+    pub fn new(path: String) -> Result<Recorder, String> {
     //TODO: ensure dir exists 
-
+    info!("Initialized at directory: {}", path);
+    //TODO: how to use DmaStream or DmaFile
         return Ok(Recorder {
-            path: path.to_string(),
+            path: path.to_owned(),
+            buffer: None
         });
     }
+    pub fn create_buffer(&mut self, size: usize) -> Result<&mut [u8], String> {
 
-    pub fn createBuffer(size: usize) -> Result<mut Buffer<u8>,String> {
-        let buffer: Vec<u8> = vec![0; buffer_size];
+        //TODO: combine path with year/month/day
+        let filename = format!("{}/{}", self.path, Recorder::generate_filename());
+        
+        // TODO: change in memory to generate filename and create the buffer to file directly
+        let buffer = vec![0;size];
+        assert!(size == buffer.len(), "Failed creating buffer with size: {} at: {}", size, filename);
 
-        return Ok(buffer);
+        self.buffer = Some(buffer);
+        trace!("new buffer: size:{} path:{}/",size, filename);
+        return Ok(self.buffer.as_mut().unwrap())
     }
 
-    pub fn flush() -> Result<(), String> {
-       return Ok(());
+    // pub fn flush() -> Result<(), String> {
+    //    return Ok(());
+    // }
+
+    fn generate_filename() -> String {
+        return "???".into();
     }
 }

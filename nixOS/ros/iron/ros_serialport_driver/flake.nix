@@ -2,7 +2,7 @@
   inputs = {
     # cargo2nix.url = "path:../../";
     # Use a github flake URL for real packages
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
+    cargo2nix.url = "github:cargo2nix/cargo2nix";
     flake-utils.follows = "cargo2nix/flake-utils";
     nixpkgs.follows = "cargo2nix/nixpkgs";
   };
@@ -18,6 +18,7 @@
       # are used to express the output but not themselves paths in the output.
       let
 
+
         # create nixpkgs that contains rustBuilder from cargo2nix overlay
         pkgs = import nixpkgs {
           inherit system;
@@ -30,11 +31,22 @@
         rustPkgs = pkgs.rustBuilder.makePackageSet {
           rustVersion = "1.73.0";
           packageFun = import ./Cargo.nix;
+
+          packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
+            (pkgs.rustBuilder.rustLib.makeOverride {
+              name = "libc";
+              overrideAttrs = drv: {
+                propagatedNativeBuildInputs = drv.propagatedNativeBuildInputs or [ ] ++ [
+                  pkgs.systemd
+                  pkgs.pkg-config
+                ];
+              };
+            })
+          ];
         };
 
       in
       rec {
-        #environment.systemPackages = [ pkgs.systemd pkgs.pkg-config ];
         # this is the output (recursive) set (expressed for each system)
         # the packages in `nix build .#packages.<system>.<name>`
         packages = {
