@@ -9,7 +9,8 @@ use clap::Parser;
 use env_logger::{Builder, Env};
 use log::*;
 use serialport::{ClearBuffer, SerialPort};
-use std::io::ErrorKind;
+use std::borrow::{Borrow, BorrowMut};
+use std::io::{ErrorKind, Write};
 use std::time::Duration;
 use utils::ResultError;
 
@@ -141,17 +142,20 @@ fn process_serial_data(
     output_format: &OutputFormat
 ) -> ResultError<Option<usize>> {
 
-    //TODO: recorder requires the ROS Time 
+    //TODO: ROS2:SYSTEM_TIME recorder create buffer needs to be captured 
     let buffer = recorder.create_buffer(buffer_size)?;
-    
-    match port.read(buffer) { //.as_mut_slice()) {
+
+    //TODO: start sensor read time
+    match port.read(buffer) { 
         Err(e) => match e.kind() {
             ErrorKind::TimedOut => {
                 warn!("Warning: {}", e.to_string());
                 //TODO: wait with PID backoff
+                return Ok(None);
             }
             ErrorKind::Interrupted => {
                 warn!("Warning: {}", e.to_string());
+                return Ok(None);
             }
             _ => {
                 error!("Error: Unknown: {:?}", e);
@@ -159,8 +163,12 @@ fn process_serial_data(
             }
         },
         Ok(bytes_read) => {
+            //TODO: required? (i think this is requires once the recorder uses DmaBuffer)
+            buffer.as_mut().flush()?; //TODO: how we can capture this time? (system time) and dump it with the suffix for the protocol? maybe update the file's modified date?
+            //TODO: measure sensor read time
+
+            //TODO: start processing timer
             let data = &buffer[..bytes_read];
-            // recorder.flush()?; //TODO: required? (i think this is requires once the recorder uses DmaBuffer)
             match *output_format {
                 OutputFormat::Hex => {
                     trace!("{:x?}", data);
@@ -169,8 +177,8 @@ fn process_serial_data(
                     trace!("{}", String::from_utf8_lossy(data).trim());
                 }
             }
+            // TODO: measure processing time
             return Ok(Some(bytes_read));
         }
     }
-    Ok(None)
 }
