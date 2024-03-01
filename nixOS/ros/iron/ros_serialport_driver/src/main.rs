@@ -169,12 +169,16 @@ fn process_serial_data(
 
             //TODO: start processing timer
             let data = &buffer[..bytes_read];
+
+            // TODO: check if trace
             match *output_format {
                 OutputFormat::Hex => {
                     trace!("{:x?}", data);
                 }
                 OutputFormat::Text => {
-                    trace!("{}", String::from_utf8_lossy(data).trim());
+                    for line in String::from_utf8_lossy(data).trim().split("\n") {
+                        trace!("{}", line);
+                    }
                 }
             }
             // TODO: measure processing time
